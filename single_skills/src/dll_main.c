@@ -5,6 +5,7 @@
 #include <MinHook.h> // Also includes Windows.h
 
 #include "structures.h"
+#include "simple_arena.h"
 
 // Once we finish loading in all the modded skill data,
 // the plugin's job is done, and we can unload it.
@@ -37,6 +38,42 @@ void hook_load_skills(void* unknown_ptr, int* unknown_int_ptr, int unknown_int) 
             patched_skill_count++;
         }
     }
+
+    skill_text_header* header = (skill_text_header*)((uint8_t*)storage + 0x34004);
+    skill_text_offset* offsets = (skill_text_offset*)((uint8_t*)header + sizeof(skill_text_header));
+    simple_arena* arena = simple_arena_create(0x10000);
+    printf("storage: %p\nheader: %p\n", storage, header);
+    char** string_array = simple_arena_alloc(arena, sizeof(char*) * header->offset_count * 2);
+    uint32_t skill_id = 0; // This is updated every other loop
+    for (uint32_t i = 0; i < header->offset_count * 2; i += 2) {
+        uint32_t name_size = offsets[skill_id].desc_offset - offsets[skill_id].name_offset;
+        uint32_t desc_size = 0;
+        if (skill_id + 1 == header->offset_count) {
+            printf("last element.\n");
+            system("pause");
+            break; // Stops a crash, needs a proper fix later.
+            desc_size = header->text_size - header->offset_table_size;
+        }
+        else {
+            desc_size = offsets[skill_id + 1].name_offset + sizeof(skill_text_offset);
+            // printf("%d ", desc_size);
+        }
+        desc_size -= offsets[skill_id].desc_offset;
+        // printf("- %d = %d\n", offsets[i / 2].desc_offset, desc_size);
+        string_array[i] = simple_arena_alloc(arena, name_size);
+        string_array[i + 1] = simple_arena_alloc(arena, desc_size);
+
+        // system("pause");
+        memcpy(string_array[i], (char*)&offsets[skill_id] + offsets[skill_id].name_offset, name_size);
+        memcpy(string_array[i + 1], (char*)&offsets[skill_id] + offsets[skill_id].desc_offset, desc_size);
+
+        // printf("name_size: %d. copying from %p\n", name_size, (char*)&offsets[i / 2] + offsets[i / 2].name_offset);
+        // printf("desc_size: %d. copying from %p\n", desc_size, (char*)&offsets[i / 2] + offsets[i / 2].desc_offset);
+        printf("%s\n%s\n\n", string_array[i], string_array[i + 1]);
+        skill_id += 1;
+    }
+
+    simple_arena_free(arena);
     printf("single_skills: Patched in %d modded skill(s).\n", patched_skill_count);
     ready_to_unload_plugin = true;
 }

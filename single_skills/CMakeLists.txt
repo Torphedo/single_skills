@@ -1,6 +1,6 @@
 add_library(single_skills SHARED
 	"src/dll_main.c"
-)
+        src/simple_arena.c src/simple_arena.h)
 
 # Add the MinHook library to our DLL
 target_link_libraries(single_skills PRIVATE minhook)
