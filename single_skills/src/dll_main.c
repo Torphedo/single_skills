@@ -25,7 +25,7 @@ void hook_load_skills(void* unknown_ptr, int* unknown_int_ptr, int unknown_int) 
     uint32_t patched_skill_count = 0;
     for (uint32_t i = 0; i < 750; i++) {
         // Puts a new path in the "path" variable with the skill number (such as "/skills/120.skill")
-        sprintf(path, "skills/%d.skill", i);
+        sprintf(path, "/skills/%d.skill", i);
         // We blindly try to open skill files for every ID, if the file stream is non-zero that means the file exists.
         FILE* skill_file = fopen(path, "rb");
         if (skill_file != NULL) {
@@ -42,35 +42,83 @@ void hook_load_skills(void* unknown_ptr, int* unknown_int_ptr, int unknown_int) 
     skill_text_header* header = (skill_text_header*)((uint8_t*)storage + 0x34004);
     skill_text_offset* offsets = (skill_text_offset*)((uint8_t*)header + sizeof(skill_text_header));
     simple_arena* arena = simple_arena_create(0x10000);
-    printf("storage: %p\nheader: %p\n", storage, header);
     char** string_array = simple_arena_alloc(arena, sizeof(char*) * header->offset_count * 2);
     uint32_t skill_id = 0; // This is updated every other loop
+
+    // Copy all strings to a new block of memory
     for (uint32_t i = 0; i < header->offset_count * 2; i += 2) {
         uint32_t name_size = offsets[skill_id].desc_offset - offsets[skill_id].name_offset;
         uint32_t desc_size = 0;
         if (skill_id + 1 == header->offset_count) {
-            printf("last element.\n");
-            system("pause");
             break; // Stops a crash, needs a proper fix later.
             desc_size = header->text_size - header->offset_table_size;
         }
         else {
             desc_size = offsets[skill_id + 1].name_offset + sizeof(skill_text_offset);
-            // printf("%d ", desc_size);
         }
         desc_size -= offsets[skill_id].desc_offset;
-        // printf("- %d = %d\n", offsets[i / 2].desc_offset, desc_size);
         string_array[i] = simple_arena_alloc(arena, name_size);
         string_array[i + 1] = simple_arena_alloc(arena, desc_size);
 
-        // system("pause");
         memcpy(string_array[i], (char*)&offsets[skill_id] + offsets[skill_id].name_offset, name_size);
         memcpy(string_array[i + 1], (char*)&offsets[skill_id] + offsets[skill_id].desc_offset, desc_size);
 
-        // printf("name_size: %d. copying from %p\n", name_size, (char*)&offsets[i / 2] + offsets[i / 2].name_offset);
-        // printf("desc_size: %d. copying from %p\n", desc_size, (char*)&offsets[i / 2] + offsets[i / 2].desc_offset);
-        printf("%s\n%s\n\n", string_array[i], string_array[i + 1]);
         skill_id += 1;
+    }
+
+    // Delete the offset table and text
+    memset(offsets, 0, header->text_size - sizeof(*header));
+    skill_id = 0;
+    char* text_base = (char*)offsets + header->offset_table_size - sizeof(*header);
+    char* text_pos = text_base;
+
+    // Rebuild offset table and copy back strings (from files if present)
+    for (uint32_t i = 0; i < header->offset_count * 2; i += 2) {
+        if (skill_id + 1 == header->offset_count) {
+            break;
+        }
+        offsets[skill_id].index = skill_id + 1;
+
+        sprintf(path, "/skills/text/%d.name.txt", skill_id);
+        FILE* name_txt = fopen(path, "rb");
+        sprintf(path, "/skills/text/%d.desc.txt", skill_id);
+        FILE* desc_txt = fopen(path, "rb");
+        memset(path, 0, MAX_PATH); // Clear string so it doesn't leak into the name
+
+        uint32_t name_size = 0;
+        uint32_t desc_size = 0;
+
+        if (name_txt != NULL) {
+            fread(path, MAX_PATH, 1, name_txt);
+            fclose(name_txt);
+            name_size = strlen(path) + 1;
+            memcpy(text_pos, path, name_size);
+            memset(path, 0, MAX_PATH); // Clear string so it doesn't leak into the description
+        }
+        else {
+            name_size = strlen(string_array[i]) + 1;
+            memcpy(text_pos, string_array[i], name_size);
+        }
+
+        offsets[skill_id].name_offset = (text_pos - (char*)&offsets[skill_id]);
+        text_pos += name_size;
+
+        if (desc_txt != NULL) {
+            fread(path, MAX_PATH, 1, desc_txt);
+            fclose(desc_txt);
+            desc_size = strlen(path) + 1;
+            memcpy(text_pos, path, desc_size);
+            memset(path, 0, MAX_PATH); // Clear path so it doesn't leak into the next loop
+        }
+        else {
+            desc_size = strlen(string_array[i]) + 1;
+            memcpy(text_pos, string_array[i], desc_size);
+        }
+
+        offsets[skill_id].desc_offset = (text_pos - (char*)&offsets[skill_id]);
+        text_pos += desc_size;
+
+        skill_id++;
     }
 
     simple_arena_free(arena);
