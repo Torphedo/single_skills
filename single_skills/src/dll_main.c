@@ -21,8 +21,11 @@ void hook_load_skills(void* unknown_ptr, int* unknown_int_ptr, int unknown_int) 
     // Call the original code. We don't know or care what these parameters are.
     printf("single_skills: Loading skill data...\n");
     original_load_skills(unknown_ptr, unknown_int_ptr, unknown_int);
+
     char path[MAX_PATH] = {0};
     uint32_t patched_skill_count = 0;
+    uint32_t patched_text_count = 0;
+
     for (uint32_t i = 0; i < 750; i++) {
         // Puts a new path in the "path" variable with the skill number (such as "/skills/120.skill")
         sprintf(path, "/skills/%d.skill", i);
@@ -38,6 +41,7 @@ void hook_load_skills(void* unknown_ptr, int* unknown_int_ptr, int unknown_int) 
             patched_skill_count++;
         }
     }
+    printf("single_skills: Patched in %d modded skill(s).\n", patched_skill_count);
 
     skill_text_header* header = (skill_text_header*)((uint8_t*)storage + 0x34004);
     skill_text_offset* offsets = (skill_text_offset*)((uint8_t*)header + sizeof(skill_text_header));
@@ -89,6 +93,7 @@ void hook_load_skills(void* unknown_ptr, int* unknown_int_ptr, int unknown_int) 
         uint32_t desc_size = 0;
 
         if (name_txt != NULL) {
+            patched_text_count++;
             fread(path, MAX_PATH, 1, name_txt);
             fclose(name_txt);
             name_size = strlen(path) + 1;
@@ -104,6 +109,7 @@ void hook_load_skills(void* unknown_ptr, int* unknown_int_ptr, int unknown_int) 
         text_pos += name_size;
 
         if (desc_txt != NULL) {
+            patched_text_count++;
             fread(path, MAX_PATH, 1, desc_txt);
             fclose(desc_txt);
             desc_size = strlen(path) + 1;
@@ -122,7 +128,7 @@ void hook_load_skills(void* unknown_ptr, int* unknown_int_ptr, int unknown_int) 
     }
 
     simple_arena_free(arena);
-    printf("single_skills: Patched in %d modded skill(s).\n", patched_skill_count);
+    printf("single_skills: Patched in %d skill text file(s).\n", patched_text_count);
     ready_to_unload_plugin = true;
 }
 
