@@ -3,7 +3,7 @@
 #include <stdint.h>
 
 typedef struct {
-    uint8_t data[0x90];
+    uint8_t data[0x90]; // This is all unlabelled, for now.
 }skill;
 
 typedef struct {
