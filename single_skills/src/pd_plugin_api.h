@@ -2,6 +2,13 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+/* Cleanup and virtual filesystem functions for Phantom Dust plugins */
+
+/* Example of how to call these functions:
+ * plugin_api api = *remote_api;
+ * api.PHYSFS_openRead("/skills/text/47.name.txt");
+ */
+
 typedef struct {
     void (*plugin_cleanup)(void* dll_handle);
     bool (*PHYSFS_exists)(const char* path);
