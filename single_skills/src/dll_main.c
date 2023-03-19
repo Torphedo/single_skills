@@ -6,6 +6,10 @@
 
 #include "structures.h"
 #include "simple_arena.h"
+#include "pd_plugin_api.h"
+
+// This will hold function pointers for the plugin manager's virtual filesystem functions
+plugin_api api = {0};
 
 // Once we finish loading in all the modded skill data,
 // the plugin's job is done, and we can unload it.
@@ -29,19 +33,22 @@ void hook_load_skills(void* unknown_ptr, int* unknown_int_ptr, int unknown_int) 
     for (uint32_t i = 0; i < 750; i++) {
         // Puts a new path in the "path" variable with the skill number (such as "/skills/120.skill")
         sprintf(path, "/skills/%d.skill", i);
-        // We blindly try to open skill files for every ID, if the file stream is non-zero that means the file exists.
-        FILE* skill_file = fopen(path, "rb");
-        if (skill_file != NULL) {
-            skill buffer = {0};
-            fread(&buffer, 1, sizeof(buffer), skill_file);
-            fclose(skill_file);
 
-            storage->skill_array[i] = buffer;
-            printf("single_skills: Loaded %s.\n", path); // Print to the console so we know it worked correctly
-            patched_skill_count++;
+        void* skill_file = api.PHYSFS_openRead(path);
+        if (skill_file != NULL) {
+            if (api.PHYSFS_fileLength(skill_file) == sizeof(skill)) {
+                // Read skill from file directly into its place in memory
+                api.PHYSFS_readBytes(skill_file, &storage->skill_array[i], sizeof(skill));
+                printf("single_skills: Loaded %s.\n", path); // Print to the console so we know it worked correctly
+                patched_skill_count++;
+            }
         }
     }
     printf("single_skills: Patched in %d modded skill(s).\n", patched_skill_count);
+
+    // All the following code handles rebuilding the skill text structures in memory. These
+    // consist of a header, followed by a large array of offsets ("offset table") used to
+    // determine length, followed by all the strings.
 
     skill_text_header* header = (skill_text_header*)((uint8_t*)storage + 0x34004);
     skill_text_offset* offsets = (skill_text_offset*)((uint8_t*)header + sizeof(skill_text_header));
@@ -132,8 +139,7 @@ void hook_load_skills(void* unknown_ptr, int* unknown_int_ptr, int unknown_int) 
     ready_to_unload_plugin = true;
 }
 
-void __stdcall plugin_main(HMODULE dll_handle) {
-
+void __stdcall plugin_thread(void* dll_handle, plugin_api* functions) {
     const uint8_t* pduwp = (uint8_t*)GetModuleHandle("PDUWP.exe");
     storage = (skill_storage*) (pduwp + 0x4C5240);
 
@@ -161,18 +167,12 @@ void __stdcall plugin_main(HMODULE dll_handle) {
     printf("single_skills: Unloading plugin. Bye!\n");
 
 	// Unload the plugin
-	FreeLibraryAndExitThread((HMODULE)(dll_handle), EXIT_SUCCESS);
+    api.plugin_cleanup(dll_handle);
 }
 
-__declspec(dllexport) int32_t __stdcall DllMain(HINSTANCE dll_handle, uint32_t reason, void* reserved)
-{
-	if (reason == DLL_PROCESS_ATTACH)
-	{
-		// Disable DLL notifications for new threads starting up, because we have no need to run special code here.
-		DisableThreadLibraryCalls(dll_handle);
-
-		// Start injected code
-		CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) plugin_main, dll_handle, 0, NULL);
-	}
-	return TRUE;
+__declspec(dllexport) int __stdcall plugin_main(void* dll_handle, plugin_api* functions) {
+    printf("Called plugin_main().\n");
+    api = *functions;
+    CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) plugin_thread, dll_handle, 0, NULL);
+    return TRUE;
 }
