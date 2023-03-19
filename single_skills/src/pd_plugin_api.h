@@ -7,6 +7,8 @@
 /* Example of how to call these functions:
  * plugin_api api = *remote_api;
  * api.PHYSFS_openRead("/skills/text/47.name.txt");
+ *
+ * For detailed documentation of PHYSFS_* functions, visit http://www.icculus.org/physfs/docs/html/physfs_8h.html
  */
 
 typedef struct {
