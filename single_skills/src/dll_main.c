@@ -175,7 +175,7 @@ void hook_load_skills(void* unknown_ptr, int* unknown_int_ptr, int unknown_int) 
     ready_to_unload_plugin = true;
 }
 
-void __stdcall plugin_thread(void* dll_handle) {
+void __stdcall plugin_thread(void* plugin_handle) {
     const uint8_t* pduwp = (uint8_t*)GetModuleHandle("PDUWP.exe");
     storage = (skill_storage*) (pduwp + 0x4C5240);
 
@@ -203,11 +203,11 @@ void __stdcall plugin_thread(void* dll_handle) {
     printf("single_skills: Unloading plugin. Bye!\n");
 
 	// Unload the plugin
-    api.plugin_cleanup(dll_handle);
+    api.plugin_cleanup(plugin_handle);
 }
 
-__declspec(dllexport) int __stdcall plugin_main(void* dll_handle, const plugin_api* functions) {
-    api = *functions; // Make a copy of the api function pointers so that we can easily access them
-    CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) plugin_thread, dll_handle, 0, NULL);
+__declspec(dllexport) int __stdcall plugin_main(void* plugin_handle, const plugin_api* remote_api) {
+    api = *remote_api; // Make a copy of the api function pointers so that we can easily access them
+    CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) plugin_thread, plugin_handle, 0, NULL);
     return TRUE;
 }
