@@ -85,7 +85,7 @@ void hook_load_skills(void* unknown_ptr, int* unknown_int_ptr, int unknown_int) 
     api.PHYSFS_freeList(text_file_list);
 
     if (skill_text_file_count == 0) {
-        printf("No skill text files, skipping a full text rebuild.\n");
+        printf("single_skills: No skill text files, skipping a full text rebuild.\n");
     }
     else {
         skill_text_header *header = (skill_text_header *) ((uint8_t *) storage + 0x34004);
@@ -207,7 +207,6 @@ void __stdcall plugin_thread(void* dll_handle) {
 }
 
 __declspec(dllexport) int __stdcall plugin_main(void* dll_handle, const plugin_api* functions) {
-    printf("Called plugin_main().\n");
     api = *functions; // Make a copy of the api function pointers so that we can easily access them
     CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) plugin_thread, dll_handle, 0, NULL);
     return TRUE;
