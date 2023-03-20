@@ -6,6 +6,11 @@ project(single_skills
 
 set(CMAKE_C_STANDARD 99) # Our code is C99
 set(CMAKE_SHARED_LIBRARY_PREFIX "") # Remove "lib" prefix from the output filename
+if (MSVC)
+	# Statically link C runtime. Comment this out to get a tiny DLL.
+	# On my machine the final DLL goes from ~150KiB to 21KiB.
+	set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
 
 # Compile MinHook first using the CMakeLists.txt in the "ext/minhook" folder
 add_subdirectory(ext/minhook)
