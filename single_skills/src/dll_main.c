@@ -6,14 +6,11 @@
 
 #include "structures.h"
 #include "simple_arena.h"
-#include "pd_plugin_api.h"
-
-// This will hold function pointers for the plugin manager's virtual filesystem functions
-plugin_api api = {0};
+#include "imports.h"
 
 // Once we finish loading in all the modded skill data,
 // the plugin's job is done, and we can unload it.
-static bool ready_to_unload_plugin = false;
+static bool ready_to_shut_down = false;
 
 typedef void (*LOAD_SKILLS)(void* unknown_ptr, int* unknown_int_ptr, int unknown_int);
 LOAD_SKILLS address_load_skills = NULL; // Address of the function that loads skills
@@ -44,27 +41,27 @@ void hook_load_skills(void* unknown_ptr, int* unknown_int_ptr, int unknown_int) 
     uint32_t patched_text_count = 0;
 
     // Loop through all files in the "skills" folder, and write them to the skill array if they are the correct size.
-    char** skills_file_list = api.PHYSFS_enumerateFiles("/skills/");
+    char** skills_file_list = PHYSFS_enumerateFiles("/skills/");
     for (char** i = skills_file_list; *i != NULL; i++) {
         sprintf(path, "/skills/%s", *i);
-        void* skill_file = api.PHYSFS_openRead(path);
+        void* skill_file = PHYSFS_openRead(path);
         if (skill_file != NULL) {
-            if (api.PHYSFS_fileLength(skill_file) == sizeof(skill)) {
+            if (PHYSFS_fileLength(skill_file) == sizeof(skill)) {
                 skill buffer = {0};
 
-                api.PHYSFS_readBytes(skill_file, &buffer, sizeof(skill));
+                PHYSFS_readBytes(skill_file, &buffer, sizeof(skill));
 
                 // The 2 bytes at 0x8 store the skill ID. Need to label this in the struct.
                 uint16_t current_skill_id = *(uint16_t*) &buffer.data[0x8];
                 storage->skill_array[current_skill_id] = buffer;
 
-                api.PHYSFS_close(skill_file);
+                PHYSFS_close(skill_file);
                 printf("single_skills: Loaded %s.\n", *i);
                 patched_skill_count++;
             }
         }
     }
-    api.PHYSFS_freeList(skills_file_list);
+    PHYSFS_freeList(skills_file_list);
 
     printf("single_skills: Patched in %d modded skill(s).\n", patched_skill_count);
 
@@ -76,13 +73,13 @@ void hook_load_skills(void* unknown_ptr, int* unknown_int_ptr, int unknown_int) 
      */
 
     uint32_t skill_text_file_count = 0;
-    char** text_file_list = api.PHYSFS_enumerateFiles("/skills/text/");
+    char** text_file_list = PHYSFS_enumerateFiles("/skills/text/");
     for (char** i = text_file_list; *i != NULL; i++) {
         if (path_has_extension(*i, ".name.txt") || path_has_extension(*i, ".desc.txt")){
             skill_text_file_count++;
         }
     }
-    api.PHYSFS_freeList(text_file_list);
+    PHYSFS_freeList(text_file_list);
 
     if (skill_text_file_count == 0) {
         printf("single_skills: No skill text files, skipping a full text rebuild.\n");
@@ -128,9 +125,9 @@ void hook_load_skills(void* unknown_ptr, int* unknown_int_ptr, int unknown_int) 
             offsets[skill_id].index = skill_id + 1;
 
             sprintf(path, "/skills/text/%d.name.txt", skill_id);
-            void *name_txt = api.PHYSFS_openRead(path);
+            void *name_txt = PHYSFS_openRead(path);
             sprintf(path, "/skills/text/%d.desc.txt", skill_id);
-            void *desc_txt = api.PHYSFS_openRead(path);
+            void *desc_txt = PHYSFS_openRead(path);
             memset(path, 0, MAX_PATH); // Clear string so it doesn't leak into the name
 
             uint32_t name_size = 0;
@@ -138,8 +135,8 @@ void hook_load_skills(void* unknown_ptr, int* unknown_int_ptr, int unknown_int) 
 
             if (name_txt != NULL) {
                 patched_text_count++;
-                api.PHYSFS_readBytes(name_txt, path, api.PHYSFS_fileLength(name_txt));
-                api.PHYSFS_close(name_txt);
+                PHYSFS_readBytes(name_txt, path, PHYSFS_fileLength(name_txt));
+                PHYSFS_close(name_txt);
                 name_size = strlen(path) + 1;
                 memcpy(text_pos, path, name_size);
                 memset(path, 0, MAX_PATH); // Clear string so it doesn't leak into the description
@@ -153,8 +150,8 @@ void hook_load_skills(void* unknown_ptr, int* unknown_int_ptr, int unknown_int) 
 
             if (desc_txt != NULL) {
                 patched_text_count++;
-                api.PHYSFS_readBytes(desc_txt, path, api.PHYSFS_fileLength(desc_txt));
-                api.PHYSFS_close(desc_txt);
+                PHYSFS_readBytes(desc_txt, path, PHYSFS_fileLength(desc_txt));
+                PHYSFS_close(desc_txt);
                 desc_size = strlen(path) + 1;
                 memcpy(text_pos, path, desc_size);
                 memset(path, 0, MAX_PATH); // Clear path so it doesn't leak into the next loop
@@ -172,7 +169,7 @@ void hook_load_skills(void* unknown_ptr, int* unknown_int_ptr, int unknown_int) 
         simple_arena_free(arena);
     }
     printf("single_skills: Patched in %d skill text file(s).\n", patched_text_count);
-    ready_to_unload_plugin = true;
+    ready_to_shut_down = true;
 }
 
 void __stdcall plugin_thread(void* plugin_handle) {
@@ -191,23 +188,24 @@ void __stdcall plugin_thread(void* plugin_handle) {
         printf("single_skills: Failed to enable hook.\n");
     }
 
+    import_functions();
+
     // Wait until we load the modded skill data to exit
-	while (!ready_to_unload_plugin) {
+	while (!ready_to_shut_down) {
 		Sleep(100);
 	}
     // Sleep another millisecond to make sure we don't accidentally remove the hook before it fully returns
     Sleep(1);
     MH_RemoveHook(address_load_skills);
     MH_Uninitialize();
-
-    printf("single_skills: Unloading plugin. Bye!\n");
-
-	// Unload the plugin
-    api.plugin_cleanup(plugin_handle);
 }
 
-__declspec(dllexport) int __stdcall plugin_main(void* plugin_handle, const plugin_api* remote_api) {
-    api = *remote_api; // Make a copy of the api function pointers so that we can easily access them
-    CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) plugin_thread, plugin_handle, 0, NULL);
+__declspec(dllexport) int32_t __stdcall DllMain(void* plugin_handle, uint32_t reason, void* reserved) {
+    if (reason == DLL_PROCESS_ATTACH) {
+        // Disable DLL notifications for new threads starting up, because we have no need to run special code here.
+        DisableThreadLibraryCalls(plugin_handle);
+
+        CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) plugin_thread, plugin_handle, 0, NULL);
+    }
     return TRUE;
 }
