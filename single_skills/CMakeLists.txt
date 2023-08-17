@@ -4,7 +4,7 @@ add_library(single_skills SHARED
 )
 
 # Add the MinHook library to our DLL
-target_link_libraries(single_skills PRIVATE minhook)
+target_link_libraries(single_skills PRIVATE minhook pd_loader_core)
 
 # This lets us include MinHook.h without the whole relative path.
-target_include_directories(single_skills PRIVATE "../ext/minhook/include")
+target_include_directories(single_skills PRIVATE "../ext/minhook/include" "../ext/pd_loader_core/include")

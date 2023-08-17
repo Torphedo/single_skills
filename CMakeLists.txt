@@ -12,8 +12,13 @@ if (MSVC)
 	set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 
-# Compile MinHook first using the CMakeLists.txt in the "ext/minhook" folder
+# Compile MinHook
 add_subdirectory(ext/minhook)
 
-# Compile our DLL using the CMakeLists.txt in the "single_skills" folder
+# Add pd_loader_core import library as a library. This allows us to get linked to
+# pd_loader_core.dll at runtime without building it from source.
+add_library(pd_loader_core SHARED IMPORTED)
+set_target_properties(pd_loader_core PROPERTIES IMPORTED_IMPLIB "${CMAKE_SOURCE_DIR}/ext/pd_loader_core/libpd_loader_core.dll.a")
+
+# Compile our DLL
 add_subdirectory(single_skills)
