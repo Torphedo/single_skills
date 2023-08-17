@@ -3,14 +3,20 @@
 #include <stdbool.h>
 
 #include <MinHook.h> // Also includes Windows.h
+#include <pd_loader_core.h>
 
 #include "structures.h"
 #include "simple_arena.h"
-#include "imports.h"
 
 // Once we finish loading in all the modded skill data,
 // the plugin's job is done, and we can unload it.
 static bool ready_to_shut_down = false;
+
+// Enable this to dump the modded gsdata to a valid file. For some reason,
+// the text offsets work differently at runtime than they do for a static
+// gsdata file. So by enabling this you'll get a valid file, but broken
+// text in-game.
+const bool dump_to_file = false;
 
 typedef void (*LOAD_SKILLS)(void* unknown_ptr, int* unknown_int_ptr, int unknown_int);
 LOAD_SKILLS address_load_skills = NULL; // Address of the function that loads skills
@@ -145,7 +151,12 @@ void hook_load_skills(void* unknown_ptr, int* unknown_int_ptr, int unknown_int) 
                 memcpy(text_pos, string_array[i], name_size);
             }
 
-            offsets[skill_id].name_offset = (text_pos - (char *) &offsets[skill_id]);
+            if (dump_to_file) {
+                offsets[skill_id].name_offset = (text_pos - text_base);
+            }
+            else {
+                offsets[skill_id].name_offset = (text_pos - (char *) &offsets[skill_id]);
+            }
             text_pos += name_size;
 
             if (desc_txt != NULL) {
@@ -160,15 +171,29 @@ void hook_load_skills(void* unknown_ptr, int* unknown_int_ptr, int unknown_int) 
                 memcpy(text_pos, string_array[i], desc_size);
             }
 
-            offsets[skill_id].desc_offset = (text_pos - (char *) &offsets[skill_id]);
+            if (dump_to_file) {
+                offsets[skill_id].desc_offset = (text_pos - text_base);
+            }
+            else {
+                offsets[skill_id].desc_offset = (text_pos - (char *) &offsets[skill_id]);
+            }
             text_pos += desc_size;
 
             skill_id++;
         }
 
+        header->text_size = (uintptr_t)text_pos - (uintptr_t)header;
+
         simple_arena_free(arena);
     }
     printf("single_skills: Patched in %d skill text file(s).\n", patched_text_count);
+
+    if (dump_to_file) {
+        void *gsdata_out = PHYSFS_openWrite("gsdata_en.dat");
+        PHYSFS_writeBytes(gsdata_out, storage, storage->filesize);
+        PHYSFS_close(gsdata_out);
+    }
+
     ready_to_shut_down = true;
 }
 
@@ -188,7 +213,6 @@ void __stdcall plugin_thread(void* plugin_handle) {
         printf("single_skills: Failed to enable hook.\n");
     }
 
-    import_functions();
 
     // Wait until we load the modded skill data to exit
 	while (!ready_to_shut_down) {
