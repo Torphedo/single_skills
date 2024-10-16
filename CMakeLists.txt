@@ -21,4 +21,13 @@ add_library(pd_loader_core SHARED IMPORTED)
 set_target_properties(pd_loader_core PROPERTIES IMPORTED_IMPLIB "${CMAKE_SOURCE_DIR}/ext/pd_loader_core/libpd_loader_core.dll.a")
 
 # Compile our DLL
-add_subdirectory(single_skills)
+add_library(single_skills SHARED
+	"src/dll_main.c"
+	"src/simple_arena.c"
+)
+
+# Add the MinHook library to our DLL
+target_link_libraries(single_skills PRIVATE minhook pd_loader_core)
+
+# This lets us include MinHook.h without the whole relative path.
+target_include_directories(single_skills PRIVATE "ext/minhook/include" "ext/pd_loader_core/include")
