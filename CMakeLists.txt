@@ -24,6 +24,7 @@ set_target_properties(pd_loader_core PROPERTIES IMPORTED_IMPLIB "${CMAKE_SOURCE_
 add_library(single_skills SHARED
 	"src/dll_main.c"
 	"src/simple_arena.c"
+	"src/path.c"
 )
 
 # Add the MinHook library to our DLL

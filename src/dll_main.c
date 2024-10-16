@@ -7,6 +7,7 @@
 
 #include "structures.h"
 #include "simple_arena.h"
+#include "path.h"
 
 // Once we finish loading in all the modded skill data,
 // the plugin's job is done, and we can unload it.
@@ -23,18 +24,6 @@ LOAD_SKILLS address_load_skills = NULL; // Address of the function that loads sk
 LOAD_SKILLS original_load_skills = NULL; // After we hook the function, calling this will run the original code.
 
 skill_storage* storage = NULL;
-
-// Simple check for file extensions.
-bool path_has_extension(const char* path, const char* extension) {
-    uint32_t pos = strlen(path);
-    uint16_t ext_length = strlen(extension);
-
-    // File extension is longer than input string.
-    if (ext_length > pos) {
-        return false;
-    }
-    return (strncmp(&path[pos - ext_length], extension, ext_length) == 0);
-}
 
 
 void hook_load_skills(void* unknown_ptr, int* unknown_int_ptr, int unknown_int) {
